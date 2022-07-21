@@ -37,3 +37,7 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# 통계청 국내인구 이동자수
+data/국내이동통계
+
