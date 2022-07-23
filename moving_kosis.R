@@ -167,4 +167,81 @@ moving_sido_nw_g
 dev.off()  
 
 
+# 5. 시도 --> 구시군  -----------------------------------------------------------
+
+# 5.1. 기술통계 ---------------------------------------------------------------
+
+moving_2021_seoul <- moving_2021_lvl_04 %>% 
+  filter(str_detect(전출지, "^서울") ) %>% 
+  mutate(전입지 = ifelse(str_detect(전입지, "^서울"), 전입지, str_sub(전입지, 1, 2))) %>% 
+  group_by(전출지, 전입지) %>% 
+  summarise(이사인구수 = sum(계)) %>% 
+  arrange(desc(이사인구수)) %>% 
+  ungroup() %>% 
+  mutate(전출지 = str_remove(전출지, "^서울 "),
+         전입지 = str_remove(전입지, "^서울 "))
+
+
+moving_2021_seoul
+
+
+# 5.2. 네트워크 데이터 ----------------------------------------------------------------
+## 5.2.1. 네트워크 데이터 정제: 결점 -----
+### 시도 인구
+pop_2021_sido <- pop_2021_raw %>% 
+  filter(LEVEL == "시도",
+         성별 == "전체") %>% 
+  select(행정구역명, 인구수 = 합계) %>% 
+  left_join(sido_cd, by = c("행정구역명" = "시도명")) %>% 
+  select(시도, 인구수)
+  
+
+### 서울시 구별 인구
+seoul_gu <- moving_2021_seoul %>% 
+  count(전출지) %>% 
+  pull(전출지) %>% 
+  dput()
+
+pop_2021_seoul <- pop_2021_raw %>% 
+  filter( 행정구역명 %in% seoul_gu) %>% 
+  filter(성별 == "전체") %>% 
+  slice(1:25) %>% 
+  select(시도 = 행정구역명, 인구수=합계)
+
+moving_seoul_node <- bind_rows(pop_2021_sido, pop_2021_seoul) %>% 
+  filter(! str_detect(시도, "서울") ) %>% 
+  mutate(인구수 = 인구수/10^4)
+
+
+## 5.2.2. 네트워크 데이터 정제: 연결선 -----
+
+moving_seoul_edge <- moving_2021_seoul %>%
+  rename(from = 전출지,
+         to   = 전입지) %>% 
+  mutate(이사인구수 = 이사인구수/10^4)
+
+## 5.2.3. 네트워크 데이터 변환(tidygraph) -----
+moving_seoul_nw <- tbl_graph(
+  nodes = moving_seoul_node, edges = moving_seoul_edge, directed = TRUE
+)
+
+# 5.3. 네트워크 시각화 --------------------------------------------------
+
+moving_seoul_nw_g <- ggraph(moving_seoul_nw, layout = "linear", circular = TRUE) +
+  # geom_edge_link(aes(width = 이사인구수), alpha = 0.8) +
+  geom_edge_arc(aes(width = 이사인구수), alpha = 0.3) +
+  geom_edge_loop(aes(width = 이사인구수))+ 
+  scale_edge_width(range = c(0.1, 5)) +
+  geom_node_point(aes(size = 인구수, color = 시도)) +
+  geom_label(aes(x = x, y = y,label = 시도), nudge_y = 0.1) +
+  theme_graph(base_family="NanumGothic") +
+  labs(title="서울시 구별 이사인구수(단위 만명)")
+
+moving_seoul_nw_g
+
+ragg::agg_png(glue::glue("module/images/moving_seoul_nw_g.png"), width = 297, height = 210, units = "mm", res = 600)
+moving_seoul_nw_g
+dev.off()  
+
+
 
